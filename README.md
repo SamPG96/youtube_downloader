@@ -12,13 +12,15 @@ In a short few steps the user can trim the video and select the file format they
   - flv
   - 3gp
   - avi
+  
 I created this program because I believe in time that it will become more efficient and easier to use than conventional '_Youtube Downloader_' program 
 at '_http://download.cnet.com/YTD-Video-Downloader/3000-2071_4-10647340.html_'.
 
 ##Prerequisites
   - Only been tested with '_Python 3.3_' on a Windows 7/10 machine
-  - '_ffmpeg_' must be installed and included in the main '_PATH_' variable. Watch this tutorial for help '_https://www.youtube.com/watch?v=YlF8kg5U2kc_'.
-  - The Pafy Python module must be installed using '_http://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-20150214-git-ac7fc44-win64-static.7z_', see the following links on how to install and develop with Pafy:
+  - '_ffmpeg_' must be installed and included in the main '_PATH_' variable. To get '_ffmpeg_' download '_http://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-20150214-git-ac7fc44-win64-static.7z_'.
+     Watch this tutorial for more help '_https://www.youtube.com/watch?v=YlF8kg5U2kc_'.
+  - The Pafy Python module must be installed using, see the following links on how to install and develop with Pafy:
     - https://pypi.python.org/pypi/pafy
     - http://pythonhosted.org//Pafy/#pafy-attributes
     
