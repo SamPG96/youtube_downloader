@@ -80,7 +80,6 @@ install '_Pafy_'. However '_ffmpeg_' will still need to be installed on every ma
 ##Known bugs
   - Sometimes deleting items in the download list in bulk doesn't always delete them all.
   - Sometimes Python will randomly crash, could be caused from the threading processes.
-  - There can be a long period of time between when the download progress window is closed and the download input window is opened when the '_Cancel_' button is pressed in the download progress window.
   - Occasionally the program will just stop without any errors when the '_Cancel_' button is pressed in the download progress window.
   - The code in some areas could be improved and cleaned up such as:
       - The '_download_' method in the class '_Download_Streams_' in the file '_screens_'.

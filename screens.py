@@ -6,11 +6,11 @@ from tkinter import (filedialog, Frame, Button, Label, Spinbox, Entry, Menu,
 import time, datetime
 import json
 import os
-from tools import stream_gen
+from streams import Stream_Generator
 from convert import Convert
 from settings import Settings_Parser
 
-settings_file = os.getcwd()+"/settings.ini"
+settings_file = os.getcwd() + "/settings.ini"
 
 class Screen(object):
     """ Inherited by all screen objects and provides common solutions """
@@ -69,8 +69,8 @@ class Settings(Frame, Screen):
                                            relief=GROOVE,
                                            width=33)
         self.download_entry_widget.place(x=125, y=40)
-        directory = self.settings_conf["LOCATIONS"]["download"]
-        self.download_entry_widget.insert(0, directory)
+        download_directory = self.settings_conf["LOCATIONS"]["download"]
+        self.download_entry_widget.insert(0, download_directory)
         Button(height=1,font=('times',10), text='Browse',
                command=self.browse_download_folder_pressed).place(x=335, y=37)
         # choose default file format
@@ -161,12 +161,12 @@ class Download_Input_Screen(Frame, Screen):
         self.to_download = download_list
         self.list_boxes = []
         self.main_button_widgets = []
-        self.session_timestamp=datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S')
+        self.session_timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S')
         Screen.__init__(self)
         self.add_download_list_to_table()
 
     def create_widgets(self):
-        # creates a menu bar at the top of the window to display useful tools
+        # creates a menu bar at the top of the window to display useful streams
         menu_bar = Menu()
         session_menu = Menu(menu_bar)
         session_menu.add_command(label="Load session", command=self.load_session_pressed)
@@ -295,23 +295,23 @@ class Download_Input_Screen(Frame, Screen):
         self.con_req_list_widget.place(x=642, y=120)
         self.con_req_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
         Label(borderwidth=1, relief=GROOVE, text='Start', font=('times',10,'bold'), width=8).place(x=705, y=102)
-        self.start_list_widget = Listbox(highlightthickness=0,
+        self.start_time_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
                                     yscrollcommand=self.scrollbar_widget_y.set,
                                     exportselection=False,
                                     width=9,
                                     height=23)
-        self.start_list_widget.place(x=705, y=120)
-        self.start_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.start_time_list_widget.place(x=705, y=120)
+        self.start_time_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
         Label(borderwidth=1, relief=GROOVE, text='End', font=('times',10,'bold'), width=8).place(x=759, y=102)
-        self.end_list_widget = Listbox(highlightthickness=0,
+        self.end_time_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
                                     yscrollcommand=self.scrollbar_widget_y.set,
                                     exportselection=False,
                                     width=9,
                                     height=23)
-        self.end_list_widget.place(x=759, y=120)
-        self.end_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.end_time_list_widget.place(x=759, y=120)
+        self.end_time_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
         Label(borderwidth=1, relief=GROOVE, text='Duration', font=('times',10,'bold'), width=9).place(x=813, y=102)
         self.duration_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
@@ -327,8 +327,8 @@ class Download_Input_Screen(Frame, Screen):
                                 self.url_list_widget,
                                 self.format_list_widget,
                                 self.con_req_list_widget,
-                                self.start_list_widget,
-                                self.end_list_widget,
+                                self.start_time_list_widget,
+                                self.end_time_list_widget,
                                 self.duration_list_widget))
         for tList in self.list_boxes:
             tList.bind('<<ListboxSelect>>', self.list_box_selection)
@@ -348,12 +348,11 @@ class Download_Input_Screen(Frame, Screen):
         
     def add_download_list_to_table(self):
         # Add the contents of the download list to the table
-        if not self.to_download:
-            return
-        temp_download = self.to_download
-        self.to_download = []
-        for stream in temp_download:
-            self.add_to_GUI_list([self.submit_stream(stream)[1]])
+        for stream in self.to_download:
+            self.add_stream_meta_to_session_file(stream.get_url(), stream.get_chosen_format(),
+                                                 stream.get_start_time(), stream.get_end_time())
+            stream.update_properties()
+            self.add_to_GUI_list([stream])
 
     def track_scrollbar_y(self,*args):
         # Move up and down in all list boxes via a scroll bar
@@ -475,11 +474,11 @@ class Download_Input_Screen(Frame, Screen):
         # Add all input data for the selected stream back into the entry boxes
         # and remove from the table.
         self.reset_control_widgets()
-        stream=self.to_download[int(self.selected_lines[0])]
-        self.url_input_widget.insert(0,stream["url"])
-        self.format_input.set(stream["chosen_format"])
-        if stream["start_time"] != "00:00:00":
-            start_time = stream["start_time"].split(":")
+        stream = self.to_download[int(self.selected_lines[0])]
+        self.url_input_widget.insert(0, stream.get_url())
+        self.format_input.set(stream.get_chosen_format())
+        if stream.is_start_time_set():
+            start_time = str(stream.get_start_time()).split(":")
             self.start_time_checkbox_widget.select()
             self.start_time_hour_widget.configure(state=NORMAL)
             self.start_time_hour_input.set(start_time[0])
@@ -487,8 +486,8 @@ class Download_Input_Screen(Frame, Screen):
             self.start_time_minute_input.set(start_time[1])
             self.start_time_second_widget.configure(state=NORMAL)
             self.start_time_second_input.set(start_time[2])
-        if stream["end_time"] != stream["duration"]:
-            end_time = stream["end_time"].split(":")
+        if stream.is_end_time_set():
+            end_time = str(stream.get_end_time()).split(":")
             self.end_time_checkbox_widget.select()
             self.end_time_hour_widget.configure(state=NORMAL)
             self.end_time_hour_input.set(end_time[0])
@@ -506,6 +505,13 @@ class Download_Input_Screen(Frame, Screen):
     def change_status(self, message, colour="black"):
         # Change status message and colour
         self.status_label.config(text=message, fg=colour)
+
+    def add_stream_meta_to_session_file(self, url, chosen_format, start_time, end_time):
+        self.session_meta.append({"url": url,
+                                  "chosen_format": chosen_format,
+                                  "start_time": str(start_time),
+                                  "end_time": str(end_time)})
+        self.update_session_file()
 
     def update_session_file(self):
         # Update the json file with the current download list
@@ -534,21 +540,21 @@ class Download_Input_Screen(Frame, Screen):
         total_sessions = len(session_contents)
         GUI_meta = []
         failed_urls = []
-        for session_count, stream in enumerate(session_contents):
+        for session_count, stream_meta in enumerate(session_contents):
             self.change_status("Loading session %s of %s... " %(session_count+1, total_sessions), colour="red")
-            success, output = self.submit_stream(stream)
+            success, output = self.submit_stream(stream_meta)
             if success:
                 GUI_meta.append(output)
             else:
-                failed_urls.append(stream["url"])
+                failed_urls.append(stream_meta["url"])
         if not failed_urls:
             self.change_status("Ok")
         else:
             self.change_status("Failed to add: %s" %(", ".join(failed_urls)), colour="red")
         self.after(0, self.add_to_GUI_list, GUI_meta)
 
-    def add_input_url(self, input_meta):
-        # Get a stream object with a URL and some metadata
+    def submit_user_input(self, input_meta):
+        # Get a stream object from the input metadata and handle any errors
         success, output = self.submit_stream(input_meta)
         if success:
             self.add_to_GUI_list([output])
@@ -560,12 +566,13 @@ class Download_Input_Screen(Frame, Screen):
     def add_pressed(self):
         # Collect input data from entry fields and create a thread to check and add the URL
         input_meta = {
-                    "url":self.url_input.get(),
-                    "chosen_format":self.format_input.get(),
-                    "start_time":"00:00:00",
+                    "url": self.url_input.get(),
+                    "chosen_format": self.format_input.get(),
+                    "start_time": None,
+                    "end_time": None
                     }
         if (self.start_time_checkbox_value.get()):
-            input_meta["start_time"]=(self.start_time_hour_input.get() + ":" +
+            input_meta["start_time"] = (self.start_time_hour_input.get() + ":" +
                                       self.start_time_minute_input.get() + ":" +
                                       self.start_time_second_input.get())
         if (self.end_time_checkbox_value.get()):
@@ -574,7 +581,7 @@ class Download_Input_Screen(Frame, Screen):
                                       self.end_time_second_input.get())
         self.change_status("Checking URL", colour="red")
         self.disable_all_control_widgets()        
-        self.add_url_thread=threading.Thread(target=self.add_input_url, args=(input_meta,))
+        self.add_url_thread=threading.Thread(target=self.submit_user_input, args=(input_meta,))
         self.add_url_thread.daemon = True
         try:
             self.add_url_thread.start()
@@ -582,69 +589,39 @@ class Download_Input_Screen(Frame, Screen):
             pass    
 
     def submit_stream(self, stream_meta):
-        # Creates a stream object and builds some meta data for it
-        # A boolean is returned from this method as well as the meta_data to show if the 
-        # stream and its meta data was added successfully
-        def replace_special_characters(title):
-            # replaces special characters in title to an alternative to avoid invalid argument error
-            # If any of the following characters are in the title, they will be removed
-            replace_with_empty = ['~', '#', '%', '*', '{', '}', '\\', ':', '<', '>', '?', '/', '+', '|', '"']
-            # special exceptions/replacements
-            title = title.replace('"', '\'')
-            title = title.replace('&', 'and')
-            for character in replace_with_empty:
-                title = title.replace(character, '')
-            return title
-        
+        # Creates a stream object based on some meta data.
+        # A boolean is returned from this method as well as the
+        # stream object to show if the stream was successfully created
         for f in self.format_options:
             if f["format"] == stream_meta["chosen_format"]:
                 format_type = f["type"]
-                stream_meta["format_type"] = format_type
         if not format_type:
-            messagebox.showerror(title='Error', width =50, message=("File format %s is not supported" %stream_meta["chosen_format"]))
-        stream = stream_gen(stream_meta)
-        if stream.error_messages:
-            return False, stream.error_messages
-        stream_meta["stream"] = stream.get_stream()
-        try:
-            stream_meta["duration"] = stream.get_duration()
-        except Exception as e:
-            raise Exception(e)
-        stream_title = stream_meta["stream"].title
-        stream_title = replace_special_characters(stream_title)
-        stream_meta["stream_title"] = stream_title
-        stream_meta["save_location"] = os.path.join(self.settings_conf["LOCATIONS"]["download"],stream_title)
-        while os.path.isfile(stream_meta["save_location"]+"."+stream_meta["chosen_format"]):
-            stream_meta["save_location"] += " - Copy"
-        if stream.sub_format:
-            stream_meta["sub_format"] = stream.sub_format
-        if "end_time" not in stream_meta:
-            stream_meta["end_time"] = stream.get_duration()
-        if stream.sub_format:
-            stream_meta["convert_required"] = True
-        else:
-            stream_meta["convert_required"] = False
-        self.to_download.append(stream_meta)
-        self.session_meta.append({"url":stream_meta["url"],
-                                  "chosen_format":stream_meta["chosen_format"],
-                                  "start_time":stream_meta["start_time"],
-                                  "end_time":stream_meta["end_time"]})
-        self.update_session_file()
-        return True, stream_meta
+            error_message = ("File format %s is not supported" %stream_meta["chosen_format"])
+            return False, error_message
+        stream = Stream_Generator(stream_meta["url"], stream_meta["start_time"],
+                                  stream_meta["end_time"], format_type,
+                                  stream_meta["chosen_format"], self.settings_conf["LOCATIONS"]["download"])
+        stream.generate()
+        if stream.get_errors():
+            return False, stream.get_errors()
+        self.to_download.append(stream)
+        self.add_stream_meta_to_session_file(stream.get_url(), stream.get_chosen_format(),
+                                             stream.get_start_time(), stream.get_end_time())
+        return True, stream
 
-    def add_to_GUI_list(self, GUI_meta):
+    def add_to_GUI_list(self, streams):
         # Adds stream meta to the table GUI
-        for meta in GUI_meta:
-            self.name_list_widget.insert(END,meta["stream_title"])
-            self.url_list_widget.insert(END,meta["url"])
-            self.format_list_widget.insert(END,meta["chosen_format"])
-            if meta["convert_required"]:
-                self.con_req_list_widget.insert(END,"Yes")
+        for stream in streams:
+            self.name_list_widget.insert(END, stream.get_title())
+            self.url_list_widget.insert(END, stream.get_url())
+            self.format_list_widget.insert(END, stream.get_chosen_format())
+            if stream.is_convert_required():
+                self.con_req_list_widget.insert(END, "Yes")
             else:
-                self.con_req_list_widget.insert(END,"No")
-            self.start_list_widget.insert(END, meta["start_time"])
-            self.end_list_widget.insert(END, meta["end_time"])
-            self.duration_list_widget.insert(END, meta["duration"])        
+                self.con_req_list_widget.insert(END, "No")
+            self.start_time_list_widget.insert(END, stream.get_start_time())
+            self.end_time_list_widget.insert(END, stream.get_end_time())
+            self.duration_list_widget.insert(END, stream.get_duration())
         self.reset_control_widgets()
 
     def start_pressed(self):
@@ -748,8 +725,8 @@ class Download_Streams(Frame, Screen):
 
         # Add meta of all streams to be downloaded to the table
         for stream in self.to_download:
-            self.name_list_widget.insert(END,stream["stream"].title)
-            self.url_list_widget.insert(END,stream["url"])
+            self.name_list_widget.insert(END, stream.get_title())
+            self.url_list_widget.insert(END, stream.get_url())
             self.progress_list_widget.insert(END,"            -")
             self.status_list_widget.insert(END,"                  Queued")
 
@@ -796,11 +773,11 @@ class Download_Streams(Frame, Screen):
         download_attempts_limit = 3
         status = ""
         force_stop = False
-        for count,stream in enumerate(self.to_download):
+        for count, stream in enumerate(self.to_download):
             downloaded = False
             download_attempts = 0
             # the stream_report will store the stream download status and will store any errors
-            stream_report = {"stream":stream}
+            stream_report = {"stream": stream}
             self.count = count
             status = "Downloading"
             self.update_list(self.status_list_widget,('              '+ status))
@@ -809,13 +786,13 @@ class Download_Streams(Frame, Screen):
                     try:
                         # if no stream supports the user specified file format then download with a
                         # substitution file format
-                        if "sub_format" in stream:
-                            filepath = ("%s" %stream["save_location"]+'.'+stream["sub_format"])
+                        if stream.is_convert_required() or stream.is_trimmed():
+                            file_path = stream.get_temp_file_path()
                         else:
-                            filepath = ("%s" %stream["save_location"]+'.'+stream["chosen_format"])
-                        stream["stream"].download(quiet=True,
+                            file_path = stream.get_file_path()
+                        stream.get_stream().download(quiet=True,
                                                   callback=self.download_callback,
-                                                  filepath=filepath)
+                                                  filepath=file_path)
                         downloaded = True
                     except Exception as e:
                         if self.stop_download is True:
@@ -823,22 +800,24 @@ class Download_Streams(Frame, Screen):
                             force_stop = True
                         else:
                             download_attempts += 1
+                            print(e)
                         # TODO: More useful action to take when the limit has been reached
                         if download_attempts == download_attempts_limit:
                             raise Exception("Exceeded maximum download attempts")
                         time.sleep(1)
-                if stream["convert_required"] == True:
+                if stream.is_convert_required() or stream.is_trimmed():
                     # convert the file if required(when a sub file format is used)
                     status = "Converting"
                     self.update_list(self.status_list_widget,('                 '+status))
-                    Convert(stream)
+                    Convert(stream.get_file_path(), stream.get_temp_file_path(),
+                            stream.get_start_time(), stream.get_end_time())
                 status="Done"
                 stream_report["status"] = "Successful"
                 self.update_list(self.status_list_widget,("                     "+status))
             except Exception as e:
                 # add stream meta to failed files list
                 self.error_list.append({
-                                       "name": stream["stream"].title,
+                                       "name": stream.get_title(),
                                        "error": e})
                 stream_report["status"]=("Failed: ",e)
                 # update GUI table status for stream
