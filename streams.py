@@ -54,6 +54,7 @@ class Stream_Generator():
             #logger.log_debug('URL not found. Exception: %s' % e)
 
     def set_title(self):
+        # parse the title of the stream so that it is allowed to be used as a filename
         title = self.stream.title
         title = title.replace('"', '\'')
         title = title.replace('&', 'and')
@@ -62,13 +63,25 @@ class Stream_Generator():
         self.title = title
 
     def set_file_path(self):
+        # builds a file path for the stream to be downloaded to and builds a temporary
+        # path if a conversion is required or the stream needs to be trimmed. duplicate
+        # filenames are checked and handled here.
         file_path = os.path.join(self.top_dir, self.title)
+        # add ' - Copy' to the filename until its unique
         while os.path.isfile(file_path + "." + self.chosen_format):
             file_path += " - Copy"
         if self.is_convert_required():
-            self.temp_file_path = file_path + '_TEMP.' + self.sub_format
+            temp_file_path = file_path + '_TEMP'
+            # add '_TEMP' to the temporary file filename until its unique
+            while os.path.isfile(temp_file_path + '.' + self.sub_format):
+                temp_file_path += '_TEMP'
+            self.temp_file_path = temp_file_path + '.' + self.sub_format
         elif self.is_trimmed():
-            self.temp_file_path = file_path + '_TEMP.' + self.chosen_format
+            temp_file_path = file_path + '_TEMP'
+            # add '_TEMP' to the temporary file filename until its unique
+            while os.path.isfile(temp_file_path + '.' + self.chosen_format):
+                temp_file_path += '_TEMP'
+            self.temp_file_path = temp_file_path + '.' + self.chosen_format
         self.file_path = file_path + '.' + self.chosen_format
 
     def set_time(self):

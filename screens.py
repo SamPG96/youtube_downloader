@@ -8,15 +8,13 @@ import json
 import os
 from streams import Stream_Generator
 from convert import Convert
-from settings import Settings_Parser
-
-settings_file = os.getcwd() + "/settings.ini"
 
 class Screen(object):
     """ Inherited by all screen objects and provides common solutions """
-    def __init__(self):
+    def __init__(self, settings):
         self.next_window=None
         # create widgets for screen
+        self.settings = settings
         self.create_widgets()
         
     def get_next_window(self):
@@ -29,9 +27,9 @@ class Screen(object):
 
 class Main_Menu(Frame, Screen):
     """ The first and youtube_downloader menu that appears when the program starts. """
-    def __init__(self,master):
+    def __init__(self, master, settings):
         super(Main_Menu, self).__init__(master)
-        Screen.__init__(self)
+        Screen.__init__(self, settings)
 
     def create_widgets(self):
         Button(height=1, width=8, 
@@ -51,13 +49,11 @@ class Main_Menu(Frame, Screen):
 
 class Settings(Frame, Screen):
     """ Allows user to change program settings via a GUI """
-    def __init__(self,master):
+    def __init__(self, master, settings):
         super(Settings, self).__init__(master)
-        self.s_parser = Settings_Parser(settings_file)
-        self.settings_conf = self.s_parser.get_settings()
         self.download_directory = tk.StringVar()
         self.default_format = tk.StringVar()
-        Screen.__init__(self)
+        Screen.__init__(self, settings)
 
     def create_widgets(self):
         # Change program defaults section
@@ -69,19 +65,19 @@ class Settings(Frame, Screen):
                                            relief=GROOVE,
                                            width=33)
         self.download_entry_widget.place(x=125, y=40)
-        download_directory = self.settings_conf["LOCATIONS"]["download"]
+        download_directory = self.settings.get_download_directory()
         self.download_entry_widget.insert(0, download_directory)
         Button(height=1,font=('times',10), text='Browse',
                command=self.browse_download_folder_pressed).place(x=335, y=37)
         # choose default file format
         Label(text='Download format: ',font=('times',10)).place(x=10, y=65)
-        format_options = self.get_format_options()
+        format_options = self.settings.get_supported_formats()
         self.format_input_widget=Spinbox(textvariable=self.default_format,
                                          width=6,
                                          wrap=True,
-                                         values=[x["format"] for x in format_options],
+                                         values=format_options,
                                          font=('times', 10))
-        self.default_format.set(self.settings_conf["FORMAT"]["default_format"])
+        self.default_format.set(self.settings.get_default_file_format())
         self.format_input_widget.place(x=125, y=65)
         Button(font=('times',15,'bold'), text='Back',
                command=self.back_pressed).place(x=10, y=100)
@@ -95,24 +91,10 @@ class Settings(Frame, Screen):
             self.download_entry_widget.delete(0, END)
             self.download_entry_widget.insert(0, directory)
 
-    def get_format_options(self):
-        # Return list of supported file formats from configuration file
-        format_options = []
-        audio_formats = self.settings_conf["FORMAT"]["supported_audio_only_formats"].split(",")
-        for audio_format in audio_formats:
-            format_options.append({"type":"a", "format":audio_format})
-        video_formats = self.settings_conf["FORMAT"]["supported_video_only_formats"].split(",")
-        for video_format in video_formats:
-            format_options.append({"type":"v", "format":video_format})
-        audio_video_formats = self.settings_conf["FORMAT"]["supported_audio_and_video_formats"].split(",")
-        for audio_video_format in audio_video_formats:
-            format_options.append({"type":"av", "format":audio_video_format})
-        return format_options
-
     def save_pressed(self):
         # Save new settings to configuration file
-        self.s_parser.set_option("LOCATIONS", "download", self.download_directory.get())
-        self.s_parser.set_option("FORMAT", "default_format", self.default_format.get())
+        self.settings.set_download_directory(self.download_directory.get())
+        self.settings.set_default_file_format(self.default_format.get())
         self.kill_window()
         self.next_window = 'main_menu'
         return None
@@ -125,10 +107,8 @@ class Settings(Frame, Screen):
 
 class Download_Input_Screen(Frame, Screen):
     """ Creates an input screen for streams to download """
-    def __init__(self,master,download_list=[]):
+    def __init__(self, master, settings, download_list=[]):
         super(Download_Input_Screen, self).__init__(master)
-        self.s_parser = Settings_Parser(settings_file)
-        self.settings_conf = self.s_parser.get_settings()
         # Initialise tkinter variables
         self.url_input = tk.StringVar()
         self.format_input = tk.StringVar()
@@ -140,21 +120,9 @@ class Download_Input_Screen(Frame, Screen):
         self.end_time_second_input = tk.StringVar()
         self.start_time_checkbox_value = tk.BooleanVar()
         self.end_time_checkbox_value = tk.BooleanVar()
-
         # Get file format options
-        # TODO: Parsing the settings file for file format options is already done in the same way in the 
-        #       Settings screen. To make the code less repetitive maybe make the settings parser portable?
-        self.format_options = []
-        audio_formats = self.settings_conf["FORMAT"]["supported_audio_only_formats"].split(",")
-        for audio_format in audio_formats:
-            self.format_options.append({"type":"a", "format":audio_format})
-        video_formats = self.settings_conf["FORMAT"]["supported_video_only_formats"].split(",")
-        for video_format in video_formats:
-            self.format_options.append({"type":"v", "format":video_format})
-        audio_video_formats = self.settings_conf["FORMAT"]["supported_audio_and_video_formats"].split(",")
-        for audio_video_format in audio_video_formats:
-            self.format_options.append({"type":"av", "format":audio_video_format})
-        self.default_format = self.settings_conf["FORMAT"]["default_format"]
+        self.supported_file_formats = settings.get_supported_formats()
+        self.default_format = settings.get_default_file_format()
         # Initialise variables
         self.streams_to_download = []
         self.session_meta = []
@@ -162,7 +130,7 @@ class Download_Input_Screen(Frame, Screen):
         self.list_boxes = []
         self.main_button_widgets = []
         self.session_timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S')
-        Screen.__init__(self)
+        Screen.__init__(self, settings)
         self.add_download_list_to_table()
 
     def create_widgets(self):
@@ -186,7 +154,7 @@ class Download_Input_Screen(Frame, Screen):
         self.url_input_widget=Entry(textvariable=self.url_input, width=45, font=('times', 11))
         self.url_input_widget.place(x=10, y=50)
         self.format_input_widget=Spinbox(textvariable=self.format_input, width=6,
-                                         wrap=True, values=[x["format"] for x in self.format_options], 
+                                         wrap=True, values=self.supported_file_formats,
                                          font=(26))
         self.format_input_widget.place(x=335, y=50)
         self.start_time_checkbox_widget = Checkbutton(onvalue=True, offvalue=False, 
@@ -592,15 +560,11 @@ class Download_Input_Screen(Frame, Screen):
         # Creates a stream object based on some meta data.
         # A boolean is returned from this method as well as the
         # stream object to show if the stream was successfully created
-        for f in self.format_options:
-            if f["format"] == stream_meta["chosen_format"]:
-                format_type = f["type"]
-        if not format_type:
-            error_message = ("File format %s is not supported" %stream_meta["chosen_format"])
-            return False, error_message
+        format_type = self.settings.get_format_type(stream_meta["chosen_format"])
+        download_directory = self.settings.get_download_directory()
         stream = Stream_Generator(stream_meta["url"], stream_meta["start_time"],
                                   stream_meta["end_time"], format_type,
-                                  stream_meta["chosen_format"], self.settings_conf["LOCATIONS"]["download"])
+                                  stream_meta["chosen_format"], download_directory)
         stream.generate()
         if stream.get_errors():
             return False, stream.get_errors()
@@ -643,15 +607,19 @@ class Download_Input_Screen(Frame, Screen):
             
 class Download_Streams(Frame, Screen):
     """ Download and monitors all streams from the download list"""
-    def __init__(self,master,download_list):
+    def __init__(self, master, settings, download_list):
         super(Download_Streams, self).__init__(master)
         self.list_boxes = []
-        self.download_report = []
         self.error_list = []
-        self.to_download = download_list
         self.count = None
-        self.stop_download = False
-        Screen.__init__(self)
+        self.force_stop_download = False
+        self.download_process_running = False
+        self.previous_button_widget_text = "Cancel"
+        self.download_struc_pointer = -1
+        self.download_struc = self.structure_download_list(download_list)
+        Screen.__init__(self, settings)
+        self.add_download_meta_to_table()
+        self.start_download()
 
     def create_widgets(self):
         # Creates the table to see the download information about all the streams
@@ -707,7 +675,7 @@ class Download_Streams(Frame, Screen):
 
         self.previous_widget = Button(height= 1, width= 8,
                                       font=('times',18,'bold'),
-                                      text='Cancel',
+                                      text=self.previous_button_widget_text,
                                       command=self.previous_pressed)
         self.previous_widget.place(x=5,y=550)
         self.done_widget = Button(height= 1, width= 8,
@@ -722,21 +690,6 @@ class Download_Streams(Frame, Screen):
                                           command=self.create_error_report_box,
                                           state=DISABLED)
         self.error_report_widget.place(x=555, y=515)
-
-        # Add meta of all streams to be downloaded to the table
-        for stream in self.to_download:
-            self.name_list_widget.insert(END, stream.get_title())
-            self.url_list_widget.insert(END, stream.get_url())
-            self.progress_list_widget.insert(END,"            -")
-            self.status_list_widget.insert(END,"                  Queued")
-
-        self.download_thread=threading.Thread(target=self.download)
-        self.download_thread.daemon = True
-        # Start stream download
-        try:
-            self.download_thread.start()
-        except TclError:
-            pass
 
     def track_scrollbar_y(self, *args):
         # Move up and down in all list boxes via a scroll bar
@@ -757,90 +710,186 @@ class Download_Streams(Frame, Screen):
             tList.yview("scroll", event.delta,"units")
         return "break"
 
-    def list_box_selection(self,event):
+    def list_box_selection(self, event):
         # Highlight/unhighlight the cell in every column in the row selected or not selected
         if not event.widget.curselection():
             return
-        self.selected_line=event.widget.curselection()[0]
+        self.selected_line = event.widget.curselection()[0]
         for tList in self.list_boxes:
             tList.selection_clear(first=0,last=END)
             tList.selection_set(first=self.selected_line)
 
-    def download(self):
-        # Downloads each stream in the download list
-        download_attempts = 0
-        # A stream download should only be attempted the following maximum number of times
+    def flip_previous_button_text(self):
+        # flips the text in the previous button widget between 'Back' and 'Cancel'
+        if self.previous_button_widget_text == 'Back':
+            self.previous_widget.configure(text='Cancel')
+            self.previous_button_widget_text = 'Cancel'
+        else:
+            self.previous_widget.configure(text='Back')
+            self.previous_button_widget_text = 'Back'
+
+    def add_download_meta_to_table(self):
+        # adds the stream meta to the on screen table table
+        for position in self.download_struc.keys():
+            stream_meta = self.download_struc[position]
+            stream = stream_meta['stream']
+            self.name_list_widget.insert(END, stream.get_title())
+            self.url_list_widget.insert(END, stream.get_url())
+            self.progress_list_widget.insert(END, stream_meta['progress'])
+            self.status_list_widget.insert(END, stream_meta['status'])
+
+    def structure_download_list(self, download_list):
+        # generates and returns a dictionary that orders the streams by a number as tracking
+        # each streams download status and progress. The structure should look like the following:
+        #
+        # {
+        #     '1': {
+        #           'stream': <stream_obj>,
+        #           'status': 'Queued',
+        #           'progress': ''
+        #          },
+        #     '2': {
+        #           'stream': <stream_obj>,
+        #           'status': 'Queued',
+        #           'progress': ''
+        #          }
+        # }
+        temp = {}
+        for position, stream in enumerate(download_list):
+            temp[position] = {
+                                 'stream': stream,
+                                 'status': 'Queued',
+                                 'progress': ''
+                                 }
+        print(temp)
+        return temp
+
+    def get_next_stream_to_download(self):
+        # returns the next stream in the download_struc for download. The position in queue
+        # pointer is incremented
+        self.download_struc_pointer += 1
+        stream = self.download_struc[self.download_struc_pointer]['stream']
+        return stream
+
+    def is_all_downloads_completed(self):
+        # determines if any items in the download_struc is queued for download, if it is then not
+        # all downloads are complete
+        for position in self.download_struc.keys():
+            if self.download_struc[position]['status'] == 'Queued':
+                return False
+        return True
+
+    def update_download_status(self, status):
+        # updates the status of the stream being pointed to by the pointer in the download_struc and
+        # in the table on screen
+        if self.force_stop_download:
+            return
+        self.download_struc[self.download_struc_pointer]['status'] = status
+        self.update_list(self.status_list_widget, status)
+
+    def update_download_progress(self, progress):
+        # updates the progress of the stream being pointed to by the pointer in the download_struc and
+        # in the table on screen
+        spaces ='         ' # create a gap before printing displaying the percentage ('\t' not accepted)
+        if self.force_stop_download:
+            return
+        self.download_struc[self.download_struc_pointer]['progress'] = progress
+        self.update_list(self.progress_list_widget, spaces + progress + '%')
+
+    def start_download(self):
+        # create a thread for downloading the streams
+        self.download_thread = threading.Thread(target=self.download_streams)
+        self.download_thread.daemon = True
+        # Start stream download
+        try:
+            self.download_thread.start()
+        except TclError:
+            pass
+
+    def download_streams(self):
+        # Downloads each stream in the download_struc
+        # downloading a streams should be attempted the following maximum number of times
         download_attempts_limit = 3
-        status = ""
-        force_stop = False
-        for count, stream in enumerate(self.to_download):
+        self.download_process_running = True
+        while not self.is_all_downloads_completed():
+            stream = self.get_next_stream_to_download()
             downloaded = False
             download_attempts = 0
-            # the stream_report will store the stream download status and will store any errors
-            stream_report = {"stream": stream}
-            self.count = count
-            status = "Downloading"
-            self.update_list(self.status_list_widget,('              '+ status))
-            try:
-                while not downloaded and not force_stop:
-                    try:
-                        # if no stream supports the user specified file format then download with a
-                        # substitution file format
-                        if stream.is_convert_required() or stream.is_trimmed():
-                            file_path = stream.get_temp_file_path()
-                        else:
-                            file_path = stream.get_file_path()
-                        stream.get_stream().download(quiet=True,
-                                                  callback=self.download_callback,
-                                                  filepath=file_path)
-                        downloaded = True
-                    except Exception as e:
-                        if self.stop_download is True:
-                            # this will exit the download loop
-                            force_stop = True
-                        else:
-                            download_attempts += 1
-                            print(e)
-                        # TODO: More useful action to take when the limit has been reached
-                        if download_attempts == download_attempts_limit:
-                            raise Exception("Exceeded maximum download attempts")
-                        time.sleep(1)
+            self.update_download_status('Downloading')
+            while not downloaded:
+                # check if an external condition is forcing the download process to stop
+                if self.force_stop_download:
+                    # confirm the process was stopped
+                    self.download_process_running = False
+                    return
+                # get a destination path for the download
                 if stream.is_convert_required() or stream.is_trimmed():
-                    # convert the file if required(when a sub file format is used)
-                    status = "Converting"
-                    self.update_list(self.status_list_widget,('                 '+status))
-                    Convert(stream.get_file_path(), stream.get_temp_file_path(),
-                            stream.get_start_time(), stream.get_end_time())
-                status="Done"
-                stream_report["status"] = "Successful"
-                self.update_list(self.status_list_widget,("                     "+status))
-            except Exception as e:
-                # add stream meta to failed files list
-                self.error_list.append({
-                                       "name": stream.get_title(),
-                                       "error": e})
-                stream_report["status"]=("Failed: ",e)
-                # update GUI table status for stream
-                if status == "Downloading":
-                    self.update_list(self.status_list_widget,"      Error during download")
-                elif status == "Converting":
-                    self.update_list(self.status_list_widget,"     Error during converting")
+                    file_path = stream.get_temp_file_path()
                 else:
-                    self.update_list(self.status_list_widget,"     Unknown error occurred")
-            self.download_report.append(stream_report)
+                    file_path = stream.get_file_path()
+                try:
+                    stream.get_stream().download(quiet=True,
+                                                callback=self.download_callback,
+                                                filepath=file_path)
+                    downloaded = True
+                    self.update_download_status('Done')
+                except Exception as error:
+                    download_attempts += 1
+                    print(error, download_attempts, download_attempts_limit)
+                    if download_attempts == download_attempts_limit:
+                        error_message = "Exceeded maximum download attempts - " + str(error)
+                        self.error_list.append({
+                                    "name": stream.get_title(),
+                                    "error": error_message})
+                        self.update_download_status('Error during download')
+                        break
+                    else:
+                        # pause to increase probability of the download to work on the next attempt,
+                        # if the error is due to internet connection
+                        time.sleep(1)
+                        continue
+                if (stream.is_convert_required() or stream.is_trimmed()) and downloaded and not self.force_stop_download:
+                    try:
+                        # convert the file if required(when a sub file format is used)
+                        self.update_download_status('Converting')
+                        Convert(stream.get_file_path(), stream.get_temp_file_path(),
+                                stream.get_start_time(), stream.get_end_time())
+                        self.update_download_status('Done')
+                    except Exception as error:
+                        self.error_list.append({
+                                       "name": stream.get_title(),
+                                       "error": error})
+                        self.update_download_status('Error during converting')
+                        break
             # if one or more streams failed to download activate the error report button
             if self.error_list:
                 self.error_report_widget.configure(state=ACTIVE)
-        self.previous_widget.configure(text='Back')
+        self.flip_previous_button_text()
         self.done_widget.configure(state=NORMAL)
+        # confirm the process has finished
+        self.download_process_running = False
+
+    def cancel_all_downloads(self):
+        # cancels all streams for download and updates the tracking information in the download_struc
+        for position in self.download_struc.keys():
+            if position == self.download_struc_pointer:
+                status = 'Cancelling ...'
+            else:
+                status = 'Cancelled'
+            progress = ''
+            self.download_struc[position]['status'] = status
+            self.download_struc[position]['progress'] = progress
+            self.update_list(self.status_list_widget, status, position=position)
+            self.update_list(self.progress_list_widget, progress, position=position)
+
+    def is_download_running(self):
+        # returns a boolean for if whether any streams are currently being downloaded or converted
+        return self.download_process_running
             
     def download_callback(self, total, recvd, ratio, rate, eta):
-        # Updates download progress for a stream on the table
-        spaces = "         "
+        # Updates download progress for a stream
         progress = int(ratio*100)
-        if progress == 100:
-            spaces = "         "
-        self.update_list(self.progress_list_widget, (spaces+str(progress)+'%'))
+        self.update_download_progress(str(progress))
 
     def create_error_report_box(self):
         # Creates a window to display a report on the streams that have failed to download or convert
@@ -853,10 +902,12 @@ class Download_Streams(Frame, Screen):
         error_report = Error_Report(self.tErrorReport, self.error_list)
         error_report.mainloop()
         
-    def update_list(self, list_widget, message):
+    def update_list(self, list_widget, message, position = None):
         # Updates a cell contents in the table
-        list_widget.delete(self.count)
-        list_widget.insert(self.count, message)
+        if not position:
+            position = self.download_struc_pointer
+        list_widget.delete(position)
+        list_widget.insert(position, message)
 
     def check_error_report_running(self):
         # check if error report window is open
@@ -870,15 +921,26 @@ class Download_Streams(Frame, Screen):
         except TclError:
             return False
 
+    def wait_to_kill(self):
+        # waits for the download/convert to finish before the window is killed
+        if not self.is_download_running():
+            self.kill_window()
+            self.next_window = 'download_input'
+        else:
+            self.after(100, self.wait_to_kill)
+
     def previous_pressed(self):
         # Returns back to the input screen and kills the download thread if needed
         if self.check_error_report_running():
             return
-        if self.download_thread.isAlive():
-            self.download_thread._stopped=True
-            self.stop_download = True
-        self.kill_window()
-        self.next_window = 'download_input'
+        if self.previous_button_widget_text == 'Back':
+            self.kill_window()
+            self.next_window = 'download_input'
+        else:
+            self.force_stop_download = True
+            self.previous_widget.configure(state=DISABLED)
+            self.cancel_all_downloads()
+            self.after(0, self.wait_to_kill)
 
     def done_pressed(self):
         # Returns to youtube_downloader menu

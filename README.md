@@ -75,14 +75,14 @@ install '_Pafy_'. However '_ffmpeg_' will still need to be installed on every ma
   - Set an option for a max number of session files in the '_session_' directory. This will involve deleting older sessions.
   - Option to disable auto save of sessions.
   - Option to manually save a session.
-  - Make program settings portable.
   
 ##Known bugs
   - Sometimes deleting items in the download list in bulk doesn't always delete them all.
   - Sometimes Python will randomly crash, could be caused from the threading processes.
-  - Occasionally the program will just stop without any errors when the '_Cancel_' button is pressed in the download progress window.
   - The code in some areas could be improved and cleaned up such as:
-      - The '_download_' method in the class '_Download_Streams_' in the file '_screens_'.
-      - The stream submitting process in the class '_Download_Input_Screen_' in the file '_screens_'.
+      - Separate the handling of the windows from their background functionality that have nothing to do with the interaction of the window.
+        For example in the Download Input Screen all the handling of scrolling, button presses and creating widgets should be separate from submitting
+        the streams and loading previous sessions.
+      - Combine duplicate methods for tkinter window handling in the parent Screen class, such as scrolling.
   - Fix window positing so it is not random every time a window opens.
        

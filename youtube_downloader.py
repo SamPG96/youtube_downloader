@@ -1,16 +1,21 @@
 from tkinter import Tk
+import os
+from settings import Settings_Parser
 import screens
+
+SETTINGS_FILE = os.getcwd() + "/settings.ini"
 
 class App():
     def __init__(self):
         # start at the 'main_menu' screen
         self.next_window = 'main_menu'
         self.download_list = []
+        self.settings = Settings_Parser(SETTINGS_FILE)
 
     def run(self):
         # the main loop for the program, when the loop breaks the
         # program ends.
-        program_finished=False
+        program_finished = False
         while program_finished == False:
             if self.next_window == 'main_menu':
                 self.run_main_menu()
@@ -34,7 +39,7 @@ class App():
         tMainMenu.title("Main Menu")
         tMainMenu.geometry("400x250")
         tMainMenu.resizable(0,0)
-        m_menu = screens.Main_Menu(tMainMenu)
+        m_menu = screens.Main_Menu(tMainMenu, self.settings)
         m_menu.mainloop()
         self.check_next_window(m_menu)
 
@@ -45,7 +50,8 @@ class App():
         tDownload_Input.title("Download List")
         tDownload_Input.geometry("900x600")
         tDownload_Input.resizable(0,0)
-        download_input = screens.Download_Input_Screen(tDownload_Input, download_list=self.download_list)
+        download_input = screens.Download_Input_Screen(tDownload_Input, self.settings,
+                                                       download_list=self.download_list)
         download_input.mainloop()
         self.check_next_window(download_input)
         # get list of streams to download if the next screen isn't the main menu
@@ -61,7 +67,8 @@ class App():
         tDownload_Streams.title("Download Progress")
         tDownload_Streams.geometry("810x600")
         tDownload_Streams.resizable(0,0)
-        download_stream = screens.Download_Streams(tDownload_Streams, download_list)
+        download_stream = screens.Download_Streams(tDownload_Streams, self.settings,
+                                                   download_list)
         download_stream.mainloop()
         self.check_next_window(download_stream)
         # clear download list if the next window is the main menu
@@ -75,7 +82,7 @@ class App():
         tSettings.title("Settings")
         tSettings.geometry("400x150")
         tSettings.resizable(0,0)
-        settings = screens.Settings(tSettings)
+        settings = screens.Settings(tSettings, self.settings)
         settings.mainloop()
         self.check_next_window(settings)
         
