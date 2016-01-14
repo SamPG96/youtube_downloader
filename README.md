@@ -75,6 +75,7 @@ install '_Pafy_'. However '_ffmpeg_' will still need to be installed on every ma
   - Set an option for a max number of session files in the '_session_' directory. This will involve deleting older sessions.
   - Option to disable auto save of sessions.
   - Option to manually save a session.
+  - Automatically remove or replace keywords in title, i.e. removing 'Official Video' But allow the user to manually change it.
   
 ##Known bugs
   - Sometimes deleting items in the download list in bulk doesn't always delete them all.
@@ -83,6 +84,5 @@ install '_Pafy_'. However '_ffmpeg_' will still need to be installed on every ma
       - Separate the handling of the windows from their background functionality that have nothing to do with the interaction of the window.
         For example in the Download Input Screen all the handling of scrolling, button presses and creating widgets should be separate from submitting
         the streams and loading previous sessions.
-      - Combine duplicate methods for tkinter window handling in the parent Screen class, such as scrolling.
   - Fix window positing so it is not random every time a window opens.
        

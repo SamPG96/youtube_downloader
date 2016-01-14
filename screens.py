@@ -1,22 +1,66 @@
 import threading
-import tkinter as tk
 from tkinter import (filedialog, Frame, Button, Label, Spinbox, Entry, Menu, 
-                     Checkbutton, Listbox, Scrollbar, messagebox, Tk, 
-                     HORIZONTAL, ACTIVE, NORMAL, DISABLED, GROOVE, END, TclError)
+                     Checkbutton, Listbox, Scrollbar, Tk, HORIZONTAL, ACTIVE,
+                     NORMAL, DISABLED, GROOVE, END, TclError, StringVar, BooleanVar)
 import time, datetime
 import json
 import os
 from streams import Stream_Generator
 from convert import Convert
 
-class Screen(object):
+class Screen(Frame):
     """ Inherited by all screen objects and provides common solutions """
-    def __init__(self, settings):
-        self.next_window=None
-        # create widgets for screen
+    def __init__(self, settings, **kwargs):
+        self.next_window = None
+        # create a Tk window object
+        master = Tk()
+        super(Screen, self).__init__(master)
+        # set generic variables
+        self.kwargs = kwargs
         self.settings = settings
+        self.table_column_widgets = []
+        # set screen specific variables
+        self.set_screen_specific_variables()
+        # create and configure window
+        self.configure_window()
+        # create widgets for the window
         self.create_widgets()
+        # screen specific instructions to be performed  before main loop execution
+        self.prepare_window()
+
+    # ------------------------- useful generic methods------------------------#
+    def track_scrollbar_for_table_y(self, *args):
+        # Move up and down in all list boxes in the table via a scroll bar
+        for tList in self.table_column_widgets:
+            tList.yview(*args)
+
+    def on_mouse_wheel_table_y(self, event):
+        # Control scrolling off all list boxes in the table via the mouse wheel
+        for tList in self.table_column_widgets:
+            tList.yview("scroll", event.delta,"units")
+        return "break"
+
+    # ------------------------- window transition methods -----------------------#
+    def go_to_main_menu(self):
+        # go to the youtube_downloader menu
+        self.kill_window()
+        self.next_window = 'main_menu'
+
+    def go_to_download_input_screen(self):
+        # go to the download input screen
+        self.kill_window()
+        self.next_window = 'download_input'
         
+    def go_to_download_streams_screen(self):
+        # go to the download streams screen
+        self.kill_window()
+        self.next_window = 'download_streams'
+
+    def go_to_settings_screen(self):
+        # go to the settings screen
+        self.kill_window()
+        self.next_window = 'settings'
+
     def get_next_window(self):
         # get the next screen to be loaded
         return self.next_window
@@ -25,13 +69,19 @@ class Screen(object):
         # kill the screen
         self.master.destroy()
 
-class Main_Menu(Frame, Screen):
+class Main_Menu(Screen):
     """ The first and youtube_downloader menu that appears when the program starts. """
-    def __init__(self, master, settings):
-        super(Main_Menu, self).__init__(master)
-        Screen.__init__(self, settings)
+
+    def set_screen_specific_variables(self):
+        pass
+
+    def configure_window(self):
+        self.master.title("Main Menu")
+        self.master.geometry("400x250")
+        self.master.resizable(0,0)
 
     def create_widgets(self):
+        # create buttons for each option
         Button(height=1, width=8, 
                font=('times',35,'bold'), text='Download', 
                command=self.download_pressed).place(x=80, y=40)
@@ -39,21 +89,26 @@ class Main_Menu(Frame, Screen):
                font=('times',25), text='Settings', 
                command=self.settings_pressed).place(x=120, y=140)
 
+    def prepare_window(self):
+        pass
+
     def download_pressed(self):
-        self.kill_window()
-        self.next_window = 'download_input'
+        self.go_to_download_input_screen()
 
     def settings_pressed(self):
-        self.kill_window()
-        self.next_window = 'settings'
+        self.go_to_settings_screen()
 
-class Settings(Frame, Screen):
+class Settings(Screen):
     """ Allows user to change program settings via a GUI """
-    def __init__(self, master, settings):
-        super(Settings, self).__init__(master)
-        self.download_directory = tk.StringVar()
-        self.default_format = tk.StringVar()
-        Screen.__init__(self, settings)
+
+    def set_screen_specific_variables(self):
+        self.download_directory = StringVar()
+        self.default_format = StringVar()
+
+    def configure_window(self):
+        self.master.title("Settings")
+        self.master.geometry("400x150")
+        self.master.resizable(0,0)
 
     def create_widgets(self):
         # Change program defaults section
@@ -79,10 +134,16 @@ class Settings(Frame, Screen):
                                          font=('times', 10))
         self.default_format.set(self.settings.get_default_file_format())
         self.format_input_widget.place(x=125, y=65)
+        self.create_control_buttons()
+
+    def create_control_buttons(self):
         Button(font=('times',15,'bold'), text='Back',
                command=self.back_pressed).place(x=10, y=100)
         Button(font=('times',15,'bold'), text='Save',
                command=self.save_pressed).place(x=330, y=100)
+
+    def prepare_window(self):
+        pass
 
     def browse_download_folder_pressed(self):
         # Add path from selected directory to the entry box
@@ -92,46 +153,46 @@ class Settings(Frame, Screen):
             self.download_entry_widget.insert(0, directory)
 
     def save_pressed(self):
-        # Save new settings to configuration file
+        # Save new settings to configuration file and exit
         self.settings.set_download_directory(self.download_directory.get())
         self.settings.set_default_file_format(self.default_format.get())
-        self.kill_window()
-        self.next_window = 'main_menu'
-        return None
+        self.go_to_main_menu()
 
     def back_pressed(self):
-        # Return to youtube_downloader menu
-        self.kill_window()
-        self.next_window = 'main_menu'
-        return None
+        self.go_to_main_menu()
 
-class Download_Input_Screen(Frame, Screen):
+class Download_Input_Screen(Screen):
     """ Creates an input screen for streams to download """
-    def __init__(self, master, settings, download_list=[]):
-        super(Download_Input_Screen, self).__init__(master)
+
+    def set_screen_specific_variables(self):
         # Initialise tkinter variables
-        self.url_input = tk.StringVar()
-        self.format_input = tk.StringVar()
-        self.start_time_hour_input = tk.StringVar()
-        self.start_time_minute_input = tk.StringVar()
-        self.start_time_second_input = tk.StringVar()
-        self.end_time_hour_input = tk.StringVar()
-        self.end_time_minute_input = tk.StringVar()
-        self.end_time_second_input = tk.StringVar()
-        self.start_time_checkbox_value = tk.BooleanVar()
-        self.end_time_checkbox_value = tk.BooleanVar()
+        self.url_input = StringVar()
+        self.format_input = StringVar()
+        # create tk string variables for every start time unit and store in order of readable time position
+        self.start_time_inputs = [StringVar(), # hours
+                                  StringVar(), # minutes
+                                  StringVar()] # seconds
+        # create tk string variables for every end time unit and store in order of readable time position
+        self.end_time_inputs = [StringVar(), # hours
+                                StringVar(), # minutes
+                                StringVar()] # seconds
+        self.start_time_checkbox_value = BooleanVar()
+        self.end_time_checkbox_value = BooleanVar()
         # Get file format options
-        self.supported_file_formats = settings.get_supported_formats()
-        self.default_format = settings.get_default_file_format()
-        # Initialise variables
-        self.streams_to_download = []
+        self.supported_file_formats = self.settings.get_supported_formats()
+        self.default_format = self.settings.get_default_file_format()
+
         self.session_meta = []
-        self.to_download = download_list
-        self.list_boxes = []
-        self.main_button_widgets = []
+        self.to_download = self.kwargs["download_list"]
+        self.control_buttons = []
+        self.start_time_widgets = []
+        self.end_time_widgets = []
         self.session_timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S')
-        Screen.__init__(self, settings)
-        self.add_download_list_to_table()
+
+    def configure_window(self):
+        self.master.title("Download List")
+        self.master.geometry("900x600")
+        self.master.resizable(0,0)
 
     def create_widgets(self):
         # creates a menu bar at the top of the window to display useful streams
@@ -146,86 +207,106 @@ class Download_Input_Screen(Frame, Screen):
         Label(text='Status: ',font=('times',10,'bold')).place(x=10,y=5)
         self.set_status("Ok")
         
-        self.create_entry_boxes()
+        self.create_user_input_widgets()
         self.create_download_list_table()
+        self.create_control_buttons()
         
-    def create_entry_boxes(self):
+    def create_user_input_widgets(self):
         # create entry widgets
+        # url input
         self.url_input_widget=Entry(textvariable=self.url_input, width=45, font=('times', 11))
         self.url_input_widget.place(x=10, y=50)
+        # choose file format
         self.format_input_widget=Spinbox(textvariable=self.format_input, width=6,
                                          wrap=True, values=self.supported_file_formats,
                                          font=(26))
         self.format_input_widget.place(x=335, y=50)
+        # optionally specify an start time
         self.start_time_checkbox_widget = Checkbutton(onvalue=True, offvalue=False, 
                                                       command=self.start_time_checkbox_pressed,
                                                       variable=self.start_time_checkbox_value)
         self.start_time_checkbox_widget.place(x=408, y=50)
-        self.start_time_hour_widget = Spinbox(textvariable=self.start_time_hour_input,
+        self.start_time_hour_widget = Spinbox(textvariable=self.start_time_inputs[0],
                                               from_=00, to=23,
                                               format="%02.0f",
                                               width=3,
                                               font=(26))
-        self.start_time_hour_widget.place(x=428, y=50)
+        self.start_time_hour_widget.place(x=428, y=50) #hours
+        # place a ':' between each pair of integers  in the time format
         Label(text=':',font=('times',10,'bold')).place(x=471, y=50)
-        self.start_time_minute_widget = Spinbox(textvariable=self.start_time_minute_input,
+        self.start_time_minute_widget = Spinbox(textvariable=self.start_time_inputs[1],
                                                 from_=00, to=59,
                                                 format="%02.0f",
                                                 width=3,
                                                 font=(26))
-        self.start_time_minute_widget.place(x=482, y=50)
+        self.start_time_minute_widget.place(x=482, y=50) #minutes
         Label(text=':',font=('times',10,'bold')).place(x=525, y=50)
-        self.start_time_second_widget = Spinbox(textvariable=self.start_time_second_input,
+        self.start_time_second_widget = Spinbox(textvariable=self.start_time_inputs[2],
                                                 from_=00, to=59,
                                                 format="%02.0f",
                                                 width=3,
                                                 font=(26))
-        self.start_time_second_widget.place(x=535, y=50)
+        self.start_time_second_widget.place(x=535, y=50) #seconds
+        # store start time widgets under one list in the order of human readable time position, i.e hours, minutes, seconds
+        self.start_time_widgets.extend((
+                                        self.start_time_hour_widget,
+                                        self.start_time_minute_widget,
+                                        self.start_time_second_widget))
+        # optionally specify an end time
         self.end_time_checkbox_widget = Checkbutton(onvalue=True, offvalue=False, 
                                                     command=self.end_time_checkbox_pressed,
                                                     variable=self.end_time_checkbox_value)
         self.end_time_checkbox_widget.place(x=580, y=50)
-        self.end_time_hour_widget = Spinbox(textvariable=self.end_time_hour_input,
+        self.end_time_hour_widget = Spinbox(textvariable=self.end_time_inputs[0],
                                               from_=00, to=23,
                                               format="%02.0f",
                                               width=3,
                                               font=(26))
-        self.end_time_hour_widget.place(x=600, y=50)
+        self.end_time_hour_widget.place(x=600, y=50) #hours
         Label(text=':',font=('times',10,'bold')).place(x=643, y=50)
-        self.end_time_minute_widget = Spinbox(textvariable=self.end_time_minute_input,
+        self.end_time_minute_widget = Spinbox(textvariable=self.end_time_inputs[1],
                                                 from_=00, to=59,
                                                 format="%02.0f",
                                                 width=3,
                                                 font=(26))
-        self.end_time_minute_widget.place(x=653, y=50)
+        self.end_time_minute_widget.place(x=653, y=50) #minutes
         Label(text=':',font=('times',10,'bold')).place(x=696, y=50)
-        self.end_time_second_widget = Spinbox(textvariable=self.end_time_second_input,
+        self.end_time_second_widget = Spinbox(textvariable=self.end_time_inputs[2],
                                                 from_=00, to=59,
                                                 format="%02.0f",
                                                 width=3,
                                                 font=(26))
-        self.end_time_second_widget.place(x=706, y=50)
+        self.end_time_second_widget.place(x=706, y=50) #seconds
+        # store end time widgets under one list in the order of human readable time position, i.e hours, minutes, seconds
+        self.end_time_widgets.extend((
+                                      self.end_time_hour_widget,
+                                      self.end_time_minute_widget,
+                                      self.end_time_second_widget))
         # add entry box labels
         # TODO: Use a cleaner way of creating these headings
         Label(text='\t\t Youtube URL\t\t                File format       Trim start time (HH:MM:SS)      Trim end time (HH:MM:SS)',
               font=('times',10,'bold')).place(x=10,y=28)
         self.reset_control_widgets()
+        # create a button to add the stream details
         self.add_button = Button(width= 5, font=('times',15,'bold'), text='Add', bd=4, command=self.add_pressed)
         self.add_button.place(x=815, y=38)
+        # create a button to clear the entry boxes
         self.clear_button = Button(width= 5, font=('times',12), text='Clear', command=self.reset_control_widgets)
         self.clear_button.place(x=755, y=43)
         
     def create_download_list_table(self):
         # Create a table to show streams to be downloaded
-        self.scrollbar_widget_y=Scrollbar(command=self.track_scrollbar_y)
+        # setup scroll bars to work with the table
+        self.scrollbar_widget_y = Scrollbar(command=self.track_scrollbar_for_table_y)
         self.scrollbar_widget_y.place(x=875, y=120, height=370)
-        self.scrollbar_widget_x_name=Scrollbar(orient=HORIZONTAL, command=self.track_scrollbar_x_name)
+        self.scrollbar_widget_x_name = Scrollbar(orient=HORIZONTAL, command=self.track_scrollbar_x_name)
         self.scrollbar_widget_x_name.place(x=10, y=490, width=284)
-        self.scrollbar_widget_x_url=Scrollbar(orient=HORIZONTAL, command=self.track_scrollbar_x_url)
+        self.scrollbar_widget_x_url = Scrollbar(orient=HORIZONTAL, command=self.track_scrollbar_x_url)
         self.scrollbar_widget_x_url.place(x=294, y=490, width=275)
 
+        # draw columns and labels
         Label(borderwidth=1, relief=GROOVE, text='Name', font=('times',10,'bold'), width=40).place(x=9, y=102)
-        self.name_list_widget=Listbox(highlightthickness=0,
+        self.name_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
                                     yscrollcommand=self.scrollbar_widget_y.set,
                                     xscrollcommand=self.scrollbar_widget_x_name.set,
@@ -233,7 +314,7 @@ class Download_Input_Screen(Frame, Screen):
                                     width=47,
                                     height=23)
         self.name_list_widget.place(x=9, y=120)
-        self.name_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.name_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
         Label(borderwidth=1, relief=GROOVE, text='URL',font=('times',10,'bold'), width=39).place(x=293, y=102)
         self.url_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
@@ -243,7 +324,7 @@ class Download_Input_Screen(Frame, Screen):
                                     width=46,
                                     height=23)
         self.url_list_widget.place(x=293,y=120)
-        self.url_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.url_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
         Label(borderwidth=1, relief=GROOVE,text='Format',font=('times',10,'bold'),width=11).place(x=568, y=102)
         self.format_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
@@ -252,7 +333,7 @@ class Download_Input_Screen(Frame, Screen):
                                     width=12,
                                     height=23)
         self.format_list_widget.place(x=568, y=120)
-        self.format_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.format_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
         Label(borderwidth=1, relief=GROOVE, text='Convert', font=('times',10,'bold'), width=9).place(x=642, y=102)
         self.con_req_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
@@ -261,7 +342,7 @@ class Download_Input_Screen(Frame, Screen):
                                     width=11,
                                     height=23)
         self.con_req_list_widget.place(x=642, y=120)
-        self.con_req_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.con_req_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
         Label(borderwidth=1, relief=GROOVE, text='Start', font=('times',10,'bold'), width=8).place(x=705, y=102)
         self.start_time_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
@@ -270,7 +351,7 @@ class Download_Input_Screen(Frame, Screen):
                                     width=9,
                                     height=23)
         self.start_time_list_widget.place(x=705, y=120)
-        self.start_time_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.start_time_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
         Label(borderwidth=1, relief=GROOVE, text='End', font=('times',10,'bold'), width=8).place(x=759, y=102)
         self.end_time_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
@@ -279,7 +360,7 @@ class Download_Input_Screen(Frame, Screen):
                                     width=9,
                                     height=23)
         self.end_time_list_widget.place(x=759, y=120)
-        self.end_time_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.end_time_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
         Label(borderwidth=1, relief=GROOVE, text='Duration', font=('times',10,'bold'), width=9).place(x=813, y=102)
         self.duration_list_widget = Listbox(highlightthickness=0,
                                     selectmode="multiple",
@@ -288,44 +369,38 @@ class Download_Input_Screen(Frame, Screen):
                                     width=10,
                                     height=23)
         self.duration_list_widget.place(x=813, y=120)
-        self.duration_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.duration_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
         Label(borderwidth=1, relief=GROOVE, width=2).place(x=874, y=102)
-
-        self.list_boxes.extend((self.name_list_widget,
-                                self.url_list_widget,
-                                self.format_list_widget,
-                                self.con_req_list_widget,
-                                self.start_time_list_widget,
-                                self.end_time_list_widget,
-                                self.duration_list_widget))
-        for tList in self.list_boxes:
+        # store the object of the columns for the table in a list
+        self.table_column_widgets.extend((
+                                          self.name_list_widget,
+                                          self.url_list_widget,
+                                          self.format_list_widget,
+                                          self.con_req_list_widget,
+                                          self.start_time_list_widget,
+                                          self.end_time_list_widget,
+                                          self.duration_list_widget))
+        for tList in self.table_column_widgets:
             tList.bind('<<ListboxSelect>>', self.list_box_selection)
-        
-        self.delete_widget=Button(width= 5, font=('times',15), text='Delete',state=DISABLED, command=self.delete_from_list)
-        self.delete_widget.place(x=580, y=495)
-        self.edit_widget=Button(width= 5, font=('times',15), text='Edit',state=DISABLED, command=self.edit_pressed)
-        self.edit_widget.place(x=655, y=495)
+
+    def create_control_buttons(self):
+        # create and add control buttons to window
+        self.delete_button=Button(width= 5, font=('times',15), text='Delete',state=DISABLED, command=self.delete_from_list)
+        self.delete_button.place(x=580, y=495)
+        self.edit_button=Button(width= 5, font=('times',15), text='Edit',state=DISABLED, command=self.edit_pressed)
+        self.edit_button.place(x=655, y=495)
         self.start_button = Button(width= 5, font=('times',21,'bold'), text='Start', command=self.start_pressed)
         self.start_button.place(x=796, y=538)
         self.back_button = Button(width= 5, font=('times',21,'bold'), text='Back', command=self.back_pressed)
         self.back_button.place(x=7, y=538)
-        self.main_button_widgets = [self.back_button,
-                                   self.start_button,
-                                   self.clear_button,
-                                   self.add_button]
-        
-    def add_download_list_to_table(self):
-        # Add the contents of the download list to the table
-        for stream in self.to_download:
-            self.add_stream_meta_to_session_file(stream.get_url(), stream.get_chosen_format(),
-                                                 stream.get_start_time(), stream.get_end_time())
-            stream.update_properties()
-            self.add_to_GUI_list([stream])
+        self.control_buttons.extend((
+                                     self.back_button,
+                                     self.start_button,
+                                     self.clear_button,
+                                     self.add_button))
 
-    def track_scrollbar_y(self,*args):
-        # Move up and down in all list boxes via a scroll bar
-        for tList in self.list_boxes:
-            tList.yview(*args)
+    def prepare_window(self):
+        self.add_download_list_to_table()
 
     def track_scrollbar_x_name(self,*args):
         # Move side to side in the name list box via a scroll bar
@@ -335,15 +410,9 @@ class Download_Input_Screen(Frame, Screen):
         # Move side to side in the URL list box via a scroll bar
         self.url_list_widget.xview(*args)
 
-    def on_mouse_wheel(self, event):
-        # Control scrolling off all list boxes via the mouse wheel 
-        for tList in self.list_boxes:
-            tList.yview("scroll", event.delta,"units")
-        return "break"
-
     def disable_all_control_widgets(self):
         # Disable control buttons
-        for button in self.main_button_widgets:
+        for button in self.control_buttons:
             button.configure(state=DISABLED)
         
     def reset_control_widgets(self):
@@ -352,118 +421,86 @@ class Download_Input_Screen(Frame, Screen):
         self.format_input.set(self.default_format)
         self.start_time_checkbox_widget.deselect()
         self.end_time_checkbox_widget.deselect()
-        self.reset_start_time_widgets()
-        self.reset_end_time_widgets()
-        for button in self.main_button_widgets:
+        self.reset_time_widgets('start')
+        self.reset_time_widgets('end')
+        for button in self.control_buttons:
             button.configure(state=NORMAL)
             
-    # TODO: Combine the following methods to remove duplication of code
-    def reset_start_time_widgets(self):
-        # Clear and disable start time widgets
-        self.start_time_hour_input.set("00")
-        self.start_time_hour_widget.configure(state=DISABLED)
-        self.start_time_minute_input.set("00")
-        self.start_time_minute_widget.configure(state=DISABLED)
-        self.start_time_second_input.set("00")
-        self.start_time_second_widget.configure(state=DISABLED)
+    def reset_time_widgets(self, time_unit):
+        # Clear and disable start or end time widgets
+        if time_unit == 'start':
+            time_widgets = self.start_time_widgets
+            time_inputs = self.start_time_inputs
+        elif time_unit == 'end':
+            time_widgets = self.end_time_widgets
+            time_inputs = self.end_time_inputs
+        for widget, box_input in zip(time_widgets, time_inputs):
+            box_input.set("00")
+            widget.configure(state=DISABLED)
 
-    def reset_end_time_widgets(self):
-        # Clear and disable end time widgets
-        self.end_time_hour_input.set("00")
-        self.end_time_hour_widget.configure(state=DISABLED)
-        self.end_time_minute_input.set("00")
-        self.end_time_minute_widget.configure(state=DISABLED)
-        self.end_time_second_input.set("00")
-        self.end_time_second_widget.configure(state=DISABLED)
+    def activate_time_widgets(self, time_unit):
+        if time_unit == 'start':
+            time_widgets = self.start_time_widgets
+        elif time_unit == 'end':
+            time_widgets = self.end_time_widgets
+        for widget in time_widgets:
+            widget.configure(state=NORMAL)
 
-    # TODO: Combine the following methods to remove duplication of code
     def start_time_checkbox_pressed(self):
         # Runs every time the start time check box is pressed
         if (self.start_time_checkbox_value.get()):
             # Enable start time widgets
-            self.start_time_hour_widget.configure(state=NORMAL)
-            self.start_time_minute_widget.configure(state=NORMAL)
-            self.start_time_second_widget.configure(state=NORMAL)
+            self.activate_time_input_widgets('start')
         else:
-            self.reset_start_time_widgets()
+            self.reset_time_widgets('start')
             
     def end_time_checkbox_pressed(self):
         # Runs every time the end time check box is pressed
         if (self.end_time_checkbox_value.get()):
             # Enable end time widgets
-            self.end_time_hour_widget.configure(state=NORMAL)
-            self.end_time_minute_widget.configure(state=NORMAL)
-            self.end_time_second_widget.configure(state=NORMAL)
+            self.activate_time_input_widgets('end')
         else:
-            self.reset_end_time_widgets()
+            self.reset_time_widgets('end')
 
     def list_box_selection(self, event):
         # Highlight/unhighlight the cell in every column in the row selected or not selected
         self.selected_lines = event.widget.curselection()
         if not event.widget.curselection():
-            for tList in self.list_boxes:
+            for tList in self.table_column_widgets:
                 tList.selection_clear(first=0, last=END)
-            self.delete_widget.configure(state=DISABLED)
-            self.edit_widget.configure(state=DISABLED)
+            self.delete_button.configure(state=DISABLED)
+            self.edit_button.configure(state=DISABLED)
             return
-        for tList in self.list_boxes:
+        for tList in self.table_column_widgets:
             tList.selection_clear(first=0, last=END)
+            # highlight the same row in every column
             for line in self.selected_lines:
                 tList.selection_set(first=line)
         if len(self.selected_lines) == 1:
-            self.edit_widget.configure(state=ACTIVE)
+            self.edit_button.configure(state=ACTIVE)
         else:
-            self.edit_widget.configure(state=DISABLED)
-        self.delete_widget.configure(state=ACTIVE)
+            self.edit_button.configure(state=DISABLED)
+        self.delete_button.configure(state=ACTIVE)
 
     def delete_from_list(self):
         # Delete entire row(s) of a table and remove from download list
         ordered_lines = sorted(self.selected_lines, reverse=True)
         for line in ordered_lines:
-            for tList in self.list_boxes:
+            for tList in self.table_column_widgets:
                 tList.delete(first=line)
             del self.to_download[int(line)]
             del self.session_meta[int(line)]
-        self.delete_widget.configure(state=DISABLED)
-        self.edit_widget.configure(state=DISABLED)
+        self.delete_button.configure(state=DISABLED)
+        self.edit_button.configure(state=DISABLED)
         self.update_session_file()
 
-    def clear_session(self):
-        # Empty table and download list
-        self.to_download = []
-        self.session_meta = []
-        for tList in self.list_boxes:
-            tList.delete(first=0, last=END)
-        self.reset_control_widgets()
-        self.update_session_file()
-        
-        
-    def edit_pressed(self):
-        # Add all input data for the selected stream back into the entry boxes
-        # and remove from the table.
-        self.reset_control_widgets()
-        stream = self.to_download[int(self.selected_lines[0])]
-        self.url_input_widget.insert(0, stream.get_url())
-        self.format_input.set(stream.get_chosen_format())
-        if stream.is_start_time_set():
-            start_time = str(stream.get_start_time()).split(":")
-            self.start_time_checkbox_widget.select()
-            self.start_time_hour_widget.configure(state=NORMAL)
-            self.start_time_hour_input.set(start_time[0])
-            self.start_time_minute_widget.configure(state=NORMAL)
-            self.start_time_minute_input.set(start_time[1])
-            self.start_time_second_widget.configure(state=NORMAL)
-            self.start_time_second_input.set(start_time[2])
-        if stream.is_end_time_set():
-            end_time = str(stream.get_end_time()).split(":")
-            self.end_time_checkbox_widget.select()
-            self.end_time_hour_widget.configure(state=NORMAL)
-            self.end_time_hour_input.set(end_time[0])
-            self.end_time_minute_widget.configure(state=NORMAL)
-            self.end_time_minute_input.set(end_time[1])
-            self.end_time_second_widget.configure(state=NORMAL)
-            self.end_time_second_input.set(end_time[2])  
-        self.delete_from_list()
+    def add_download_list_to_table(self):
+        # Add the contents of the download list to the table
+        for stream in self.to_download:
+            self.add_stream_meta_to_session_file(stream.get_url(), stream.get_chosen_format(),
+                                                 stream.get_start_time(), stream.get_end_time())
+            stream.update_properties()
+            self.add_to_GUI_list([stream])
 
     def set_status(self, message):
         # Initialise status label
@@ -475,6 +512,7 @@ class Download_Input_Screen(Frame, Screen):
         self.status_label.config(text=message, fg=colour)
 
     def add_stream_meta_to_session_file(self, url, chosen_format, start_time, end_time):
+        # update the session dict with the latest stream added and update the file
         self.session_meta.append({"url": url,
                                   "chosen_format": chosen_format,
                                   "start_time": str(start_time),
@@ -485,23 +523,6 @@ class Download_Input_Screen(Frame, Screen):
         # Update the json file with the current download list
         with open((os.getcwd()+"/sessions/"+self.session_timestamp+".json"),"w") as session_file:
             json.dump(self.session_meta, session_file, indent=4, sort_keys=True)
-
-    def load_session_pressed(self):
-        # Reads a json session file and creates a thread to add it to the download table and list
-        session_file_location = filedialog.askopenfilename(initialdir="sessions")
-        if not session_file_location:
-            return
-        self.change_status("Reading session file \'%s\'..." %session_file_location, colour="red")
-        with open(session_file_location,'r') as session_file:
-            session_contents = json.load(session_file)
-        self.disable_all_control_widgets()
-        self.session_contents = session_contents
-        self.add_session_thread=threading.Thread(target=self.add_session_file_streams, args=(session_contents,))
-        self.add_session_thread.daemon = True
-        try:
-            self.add_session_thread.start()
-        except TclError:
-            pass
 
     def add_session_file_streams(self, session_contents):
         # Add a session json to the download list and table
@@ -530,31 +551,6 @@ class Download_Input_Screen(Frame, Screen):
         else:
             self.change_status(output, colour="red")
             self.reset_control_widgets()            
-
-    def add_pressed(self):
-        # Collect input data from entry fields and create a thread to check and add the URL
-        input_meta = {
-                    "url": self.url_input.get(),
-                    "chosen_format": self.format_input.get(),
-                    "start_time": None,
-                    "end_time": None
-                    }
-        if (self.start_time_checkbox_value.get()):
-            input_meta["start_time"] = (self.start_time_hour_input.get() + ":" +
-                                      self.start_time_minute_input.get() + ":" +
-                                      self.start_time_second_input.get())
-        if (self.end_time_checkbox_value.get()):
-            input_meta["end_time"]=(self.end_time_hour_input.get() + ":" +
-                                      self.end_time_minute_input.get() + ":" +
-                                      self.end_time_second_input.get())
-        self.change_status("Checking URL", colour="red")
-        self.disable_all_control_widgets()        
-        self.add_url_thread=threading.Thread(target=self.submit_user_input, args=(input_meta,))
-        self.add_url_thread.daemon = True
-        try:
-            self.add_url_thread.start()
-        except TclError:
-            pass    
 
     def submit_stream(self, stream_meta):
         # Creates a stream object based on some meta data.
@@ -588,48 +584,134 @@ class Download_Input_Screen(Frame, Screen):
             self.duration_list_widget.insert(END, stream.get_duration())
         self.reset_control_widgets()
 
+    def clear_session(self):
+        # Empty table and download list
+        self.to_download = []
+        self.session_meta = []
+        for tList in self.table_column_widgets:
+            tList.delete(first=0, last=END)
+        self.reset_control_widgets()
+        self.update_session_file()
+
+    def load_session_pressed(self):
+        # Reads a json session file and creates a thread to add it to the download table and list
+        session_file_location = filedialog.askopenfilename(initialdir="sessions")
+        if not session_file_location:
+            return
+        self.change_status("Reading session file \'%s\'..." %session_file_location, colour="red")
+        with open(session_file_location,'r') as session_file:
+            session_contents = json.load(session_file)
+        self.disable_all_control_widgets()
+        self.session_contents = session_contents
+        self.add_session_thread=threading.Thread(target=self.add_session_file_streams, args=(session_contents,))
+        self.add_session_thread.daemon = True
+        try:
+            self.add_session_thread.start()
+        except TclError:
+            pass
+
+    def add_pressed(self):
+        # Collect input data from entry fields and create a thread to check and add the URL
+        input_meta = {
+                    "url": self.url_input.get(),
+                    "chosen_format": self.format_input.get(),
+                    "start_time": None, #hh:mm:ss
+                    "end_time": None #hh:mm:ss
+                    }
+        if (self.start_time_checkbox_value.get()):
+            input_meta["start_time"] = (
+                                        self.start_time_inputs[0].get() + ":" +
+                                        self.start_time_inputs[1].get() + ":" +
+                                        self.start_time_inputs[2].get())
+        if (self.end_time_checkbox_value.get()):
+            input_meta["end_time"]=(
+                                    self.end_time_inputs[0].get() + ":" +
+                                    self.end_time_inputs[1].get() + ":" +
+                                    self.end_time_inputs[2].get())
+        self.change_status("Checking URL", colour="red")
+        self.disable_all_control_widgets()
+        self.add_url_thread=threading.Thread(target=self.submit_user_input, args=(input_meta,))
+        self.add_url_thread.daemon = True
+        try:
+            self.add_url_thread.start()
+        except TclError:
+            pass
+
+    def edit_pressed(self):
+        # Add all input data for the selected stream back into the entry boxes
+        # and remove from the table.
+        self.reset_control_widgets() #clear existing input
+        stream = self.to_download[int(self.selected_lines[0])]
+        # place in URL
+        self.url_input_widget.insert(0, stream.get_url())
+        # place in file format
+        self.format_input.set(stream.get_chosen_format())
+        # check if a start time was specified
+        if stream.is_start_time_set():
+            # get and format time from the stream object
+            start_time = str(stream.get_start_time()).split(":")
+            self.start_time_checkbox_widget.select()
+            # Activate the spin boxes and place in all units of start time
+            for unit in range(0,3): #loops to three as there are 3 spin boxes
+                self.start_time_widgets[unit].configure(state=NORMAL)
+                self.start_time_inputs[unit].set(start_time[unit])
+        if stream.is_end_time_set():
+            # check if a end time was specified
+            end_time = str(stream.get_end_time()).split(":")
+            self.end_time_checkbox_widget.select()
+            # Activate the spin boxes and place in all units of end time
+            for unit in range(0,3):
+                self.end_time_widgets[unit].configure(state=NORMAL)
+                self.end_time_inputs[unit].set(end_time[unit])
+        self.delete_from_list()
+
     def start_pressed(self):
-        # Go to the download screen and return the download list
-        self.kill_window()
-        self.next_window = 'download_streams'
-        return self.to_download
+        # Go to the download screen
+        self.go_to_download_streams_screen()
 
     def back_pressed(self):
         # Return to youtube_downloader menu
-        self.kill_window()
-        self.next_window = 'main_menu'
-        return None
+        self.go_to_main_menu()
 
     def get_download_list(self):
         # Return the download list
         return self.to_download
     
             
-class Download_Streams(Frame, Screen):
+class Download_Streams(Screen):
     """ Download and monitors all streams from the download list"""
-    def __init__(self, master, settings, download_list):
-        super(Download_Streams, self).__init__(master)
-        self.list_boxes = []
+
+    def set_screen_specific_variables(self):
         self.error_list = []
         self.count = None
         self.force_stop_download = False
         self.download_process_running = False
         self.previous_button_widget_text = "Cancel"
         self.download_struc_pointer = -1
-        self.download_struc = self.structure_download_list(download_list)
-        Screen.__init__(self, settings)
-        self.add_download_meta_to_table()
-        self.start_download()
+        self.download_struc = self.structure_download_list(self.kwargs["download_list"])
+
+    def configure_window(self):
+        self.master.title("Download Progress")
+        self.master.geometry("810x600")
+        self.master.resizable(0,0)
 
     def create_widgets(self):
-        # Creates the table to see the download information about all the streams
-        self.scrollbar_widget_y=Scrollbar(command=self.track_scrollbar_y)
+        # Creates all widgets for the screen
+        self.create_progress_table()
+        self.create_control_buttons()
+
+    def create_progress_table(self):
+        # Draws a table displaying the download statistics for each stream
+        # setup scroll bars to work with the table
+        self.scrollbar_widget_y=Scrollbar(command=self.track_scrollbar_for_table_y)
         self.scrollbar_widget_y.place(x=782,y=30,height=482)
         self.scrollbar_widget_x_name=Scrollbar(orient=HORIZONTAL,command=self.track_scrollbar_x_name)
         self.scrollbar_widget_x_name.place(x=10,y=510, width=266)
         self.scrollbar_widget_x_url=Scrollbar(orient=HORIZONTAL,command=self.track_scrollbar_x_url)
         self.scrollbar_widget_x_url.place(x=276,y=510, width=275)
 
+        # draw table
+        # name column
         Label(borderwidth=1, relief=GROOVE,text='Name',font=('times',10,'bold'),width=38).place(x=9,y=12)
         self.name_list_widget=Listbox(highlightthickness=0,
                                     yscrollcommand=self.scrollbar_widget_y.set,
@@ -638,7 +720,8 @@ class Download_Streams(Frame, Screen):
                                     width=44,
                                     height=30)
         self.name_list_widget.place(x=9,y=30)
-        self.name_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.name_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
+        # URL column
         Label(borderwidth=1, relief=GROOVE,text='URL',font=('times',10,'bold'),width=40).place(x=275,y=12)
         self.url_list_widget = Listbox(highlightthickness=0,
                                     yscrollcommand=self.scrollbar_widget_y.set,
@@ -647,7 +730,8 @@ class Download_Streams(Frame, Screen):
                                     width=46,
                                     height=30)
         self.url_list_widget.place(x=275,y=30)
-        self.url_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.url_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
+        # progress column
         Label(borderwidth=1, relief=GROOVE,text='Progress',font=('times',10,'bold'),width=11).place(x=553,y=12)
         self.progress_list_widget = Listbox(highlightthickness=0,
                                     yscrollcommand=self.scrollbar_widget_y.set,
@@ -655,7 +739,8 @@ class Download_Streams(Frame, Screen):
                                     width=13,
                                     height=30)
         self.progress_list_widget.place(x=553,y=30)
-        self.progress_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.progress_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
+        # status column
         Label(borderwidth=1, relief=GROOVE,text='Status',font=('times',10,'bold'),width=22).place(x=630,y=12)
         self.status_list_widget = Listbox(highlightthickness=0,
                                     yscrollcommand=self.scrollbar_widget_y.set,
@@ -663,38 +748,43 @@ class Download_Streams(Frame, Screen):
                                     width=25,
                                     height=30)
         self.status_list_widget.place(x=630,y=30)
-        self.status_list_widget.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.status_list_widget.bind("<MouseWheel>", self.on_mouse_wheel_table_y)
         Label(borderwidth=1, relief=GROOVE,width=2).place(x=782,y=12)
-
-        self.list_boxes.extend((self.name_list_widget,
-                                self.url_list_widget,
-                                self.progress_list_widget,
-                                self.status_list_widget))
-        for tList in self.list_boxes:
+        # store column objects in a list
+        self.table_column_widgets.extend((
+                                          self.name_list_widget,
+                                          self.url_list_widget,
+                                          self.progress_list_widget,
+                                          self.status_list_widget))
+        for tList in self.table_column_widgets:
             tList.bind('<<ListboxSelect>>',self.list_box_selection)
 
-        self.previous_widget = Button(height= 1, width= 8,
+    def create_control_buttons(self):
+        # Create buttons to control actions in the window
+        # go back to previous window
+        self.previous_button = Button(height= 1, width= 8,
                                       font=('times',18,'bold'),
                                       text=self.previous_button_widget_text,
                                       command=self.previous_pressed)
-        self.previous_widget.place(x=5,y=550)
-        self.done_widget = Button(height= 1, width= 8,
+        self.previous_button.place(x=5,y=550)
+        # return to main menu
+        self.done_button = Button(height= 1, width= 8,
                                   font=('times',18,'bold'),
                                   text='Done',
                                   command=self.done_pressed,
                                   state=DISABLED)
-        self.done_widget.place(x=683,y=550)
-        self.error_report_widget = Button(height= 1,
+        self.done_button.place(x=683,y=550)
+        # view error report
+        self.error_report_button = Button(height= 1,
                                           font=('times',12),
                                           text='Error Report',
                                           command=self.create_error_report_box,
                                           state=DISABLED)
-        self.error_report_widget.place(x=555, y=515)
+        self.error_report_button.place(x=555, y=515)
 
-    def track_scrollbar_y(self, *args):
-        # Move up and down in all list boxes via a scroll bar
-        for tList in self.list_boxes:
-            tList.yview(*args)
+    def prepare_window(self):
+        self.add_download_meta_to_table()
+        self.start_download()
 
     def track_scrollbar_x_name(self, *args):
         # Move side to side in the name list box via a scroll bar
@@ -704,29 +794,27 @@ class Download_Streams(Frame, Screen):
         # Move side to side in the URL list box via a scroll bar
         self.url_list_widget.xview(*args)
 
-    def on_mouse_wheel(self, event):
-        # Control scrolling off all list boxes via the mouse wheel
-        for tList in self.list_boxes:
-            tList.yview("scroll", event.delta,"units")
-        return "break"
-
     def list_box_selection(self, event):
         # Highlight/unhighlight the cell in every column in the row selected or not selected
         if not event.widget.curselection():
             return
         self.selected_line = event.widget.curselection()[0]
-        for tList in self.list_boxes:
+        for tList in self.table_column_widgets:
             tList.selection_clear(first=0,last=END)
             tList.selection_set(first=self.selected_line)
 
     def flip_previous_button_text(self):
         # flips the text in the previous button widget between 'Back' and 'Cancel'
         if self.previous_button_widget_text == 'Back':
-            self.previous_widget.configure(text='Cancel')
+            self.previous_button.configure(text='Cancel')
             self.previous_button_widget_text = 'Cancel'
         else:
-            self.previous_widget.configure(text='Back')
+            self.previous_button.configure(text='Back')
             self.previous_button_widget_text = 'Back'
+
+    def deactivate_previous_button(self):
+        # disable the previous button so it cant be
+        self.previous_button.configure(state=DISABLED)
 
     def add_download_meta_to_table(self):
         # adds the stream meta to the on screen table table
@@ -778,6 +866,10 @@ class Download_Streams(Frame, Screen):
             if self.download_struc[position]['status'] == 'Queued':
                 return False
         return True
+
+    def is_download_running(self):
+        # returns a boolean for if whether any streams are currently being downloaded or converted
+        return self.download_process_running
 
     def update_download_status(self, status):
         # updates the status of the stream being pointed to by the pointer in the download_struc and
@@ -863,9 +955,9 @@ class Download_Streams(Frame, Screen):
                         break
             # if one or more streams failed to download activate the error report button
             if self.error_list:
-                self.error_report_widget.configure(state=ACTIVE)
+                self.error_report_button.configure(state=ACTIVE)
         self.flip_previous_button_text()
-        self.done_widget.configure(state=NORMAL)
+        self.done_button.configure(state=NORMAL)
         # confirm the process has finished
         self.download_process_running = False
 
@@ -881,10 +973,6 @@ class Download_Streams(Frame, Screen):
             self.download_struc[position]['progress'] = progress
             self.update_list(self.status_list_widget, status, position=position)
             self.update_list(self.progress_list_widget, progress, position=position)
-
-    def is_download_running(self):
-        # returns a boolean for if whether any streams are currently being downloaded or converted
-        return self.download_process_running
             
     def download_callback(self, total, recvd, ratio, rate, eta):
         # Updates download progress for a stream
@@ -895,12 +983,8 @@ class Download_Streams(Frame, Screen):
         # Creates a window to display a report on the streams that have failed to download or convert
         if self.check_error_report_running():
             return
-        self.tErrorReport = Tk()
-        self.tErrorReport.title("Error Report")
-        self.tErrorReport.geometry("595x400")
-        self.tErrorReport.resizable(0,0)
-        error_report = Error_Report(self.tErrorReport, self.error_list)
-        error_report.mainloop()
+        self.error_report_window = Error_Report(self.settings, error_list=self.error_list)
+        self.error_report_window.mainloop()
         
     def update_list(self, list_widget, message, position = None):
         # Updates a cell contents in the table
@@ -912,11 +996,11 @@ class Download_Streams(Frame, Screen):
     def check_error_report_running(self):
         # check if error report window is open
         try:
-            self.tErrorReport
+            self.error_report_window.master
         except AttributeError:
             return False
         try:
-            if self.tErrorReport.state() == 'normal':
+            if self.error_report_window.master.state() == 'normal':
                 return True
         except TclError:
             return False
@@ -924,6 +1008,8 @@ class Download_Streams(Frame, Screen):
     def wait_to_kill(self):
         # waits for the download/convert to finish before the window is killed
         if not self.is_download_running():
+            if self.check_error_report_running():
+                self.error_report_window.kill_window()
             self.kill_window()
             self.next_window = 'download_input'
         else:
@@ -938,7 +1024,7 @@ class Download_Streams(Frame, Screen):
             self.next_window = 'download_input'
         else:
             self.force_stop_download = True
-            self.previous_widget.configure(state=DISABLED)
+            self.deactivate_previous_button()
             self.cancel_all_downloads()
             self.after(0, self.wait_to_kill)
 
@@ -949,18 +1035,26 @@ class Download_Streams(Frame, Screen):
         self.kill_window()
         self.next_window = 'main_menu'
 
-class Error_Report(Frame, Screen):
+class Error_Report(Screen):
     """ Produces a window to show a list of failed streams and their error messages """
-    def __init__(self, master, error_list):
-        super(Error_Report, self).__init__(master)
-        self.master = master
-        self.error_list = error_list
-        self.create_widgets()
+
+    def set_screen_specific_variables(self):
+        self.error_list = self.kwargs["error_list"]
+
+    def configure_window(self):
+        self.master.title("Error Report")
+        self.master.geometry("595x400")
+        self.master.resizable(0,0)
         
     def create_widgets(self):
         Label(self.master, borderwidth=1, text='Error Report',font=('times',15,'bold')).place(x=230, y=5)
-        # create a table to display the error meta data
-        self.scrollbar_widget_y=Scrollbar(self.master, command=self.track_scrollbar_y)
+        self.create_report_table()
+        # button to close window
+        Button(self.master, width= 10,font=('times',15,'bold'), text='Done', command=self.done_pressed).place(x=220, y=350)
+
+    def create_report_table(self):
+        # create a table to display the error report
+        self.scrollbar_widget_y=Scrollbar(self.master, command=self.track_scrollbar_for_table_y)
         self.scrollbar_widget_y.place(x=563,y=50,height=275)
         self.scrollbar_widget_x_name=Scrollbar(self.master, orient=HORIZONTAL,command=self.track_scrollbar_x_name)
         self.scrollbar_widget_x_name.place(x=10,y=323, width=276)
@@ -984,16 +1078,13 @@ class Error_Report(Frame, Screen):
                                          width=46,
                                          height=17)
         self.error_list_widget.place(x=285,y=50)
-        self.list_boxes = [self.name_list_widget,
-                           self.error_list_widget]
+        self.table_column_widgets = [self.name_list_widget,
+                                     self.error_list_widget]
         Label(self.master, borderwidth=1, relief=GROOVE,width=2).place(x=563,y=34)
-        Button(self.master, width= 10,font=('times',15,'bold'), text='Done', command=self.done_pressed).place(x=220, y=350)
         self.add_errors()
 
-    def track_scrollbar_y(self,*args):
-        # Move up and down in all list boxes via a scroll bar
-        for tList in self.list_boxes:
-            tList.yview(*args)
+    def prepare_window(self):
+        pass
 
     def track_scrollbar_x_name(self,*args):
         # Move side to side in the name list box via a scroll bar
