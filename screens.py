@@ -438,7 +438,7 @@ class Download_Input_Screen(Screen):
             box_input.set("00")
             widget.configure(state=DISABLED)
 
-    def activate_time_widgets(self, time_unit):
+    def activate_time_input_widgets(self, time_unit):
         if time_unit == 'start':
             time_widgets = self.start_time_widgets
         elif time_unit == 'end':
