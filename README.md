@@ -1,6 +1,6 @@
-#Youtube Downloader
+# Youtube Downloader
 
-##Introduction
+## Introduction
 This program uses a UI to allow a user to quickly and easily download multiple Youtube videos in one session.
 In a short few steps the user can trim the video and select the file format they wish the video to be downloaded as. The following file formats are supported:
   - mp3
@@ -16,7 +16,7 @@ In a short few steps the user can trim the video and select the file format they
 I created this program because I believe in time that it will become more efficient and easier to use than conventional '_Youtube Downloader_' program 
 at '_http://download.cnet.com/YTD-Video-Downloader/3000-2071_4-10647340.html_'.
 
-##Prerequisites
+## Prerequisites
   - Only been tested with '_Python 3.3_' on a Windows 7/10 machine
   - '_ffmpeg_' must be installed and included in the main '_PATH_' variable. To get '_ffmpeg_' download '_http://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-20150214-git-ac7fc44-win64-static.7z_'.
      Watch this tutorial for more help '_https://www.youtube.com/watch?v=YlF8kg5U2kc_'.
@@ -24,10 +24,10 @@ at '_http://download.cnet.com/YTD-Video-Downloader/3000-2071_4-10647340.html_'.
     - https://pypi.python.org/pypi/pafy
     - http://pythonhosted.org//Pafy/#pafy-attributes
     
-##Download and install
+## Download and install
   1. Pull down the git repository 'https://github.com/sammypg/youtube_downloader.git'
   
-##How to use
+## How to use
   - Run the script '_youtube_downloader.py_' in the root repository directory.
   - To change default settings go to '_Settings_' to change the following options:
        - Default location to download the Youtube videos too.
@@ -50,7 +50,7 @@ at '_http://download.cnet.com/YTD-Video-Downloader/3000-2071_4-10647340.html_'.
   - A window will appear showing the download progress for each video.
   - If any videos failed to download select '_Error report_' for more information.
   
-##Build for Windows
+## Build for Windows
 To build '_youtube_downloader_' into an '_.exe_' file for windows do the following(ensure py2exe
 package for python is installed):
   1. Open the '_setup.py_' file in '_youtube_downloader_' and check the annotation for more details.
@@ -64,7 +64,7 @@ package for python is installed):
 NOTE: This process will require the third party module '_Pafy_' to be installed as it needs to take a copy of its libraries when building. The built program can be used on any machine without needing to
 install '_Pafy_'. However '_ffmpeg_' will still need to be installed on every machine the built program is used on.
 
-##Ideas for the future
+## Ideas for the future
   - Add a '_Help_' option in the menu bar or a button which will provide help for the current window.
   - Implement a more user friendly colour scheme.
   - Add a '_Retry_' button if a stream fails to download.
@@ -77,7 +77,7 @@ install '_Pafy_'. However '_ffmpeg_' will still need to be installed on every ma
   - Option to manually save a session.
   - Automatically remove or replace keywords in title, i.e. removing 'Official Video' But allow the user to manually change it.
   
-##Known bugs
+## Known bugs
   - Sometimes deleting items in the download list in bulk doesn't always delete them all.
   - Sometimes Python will randomly crash, could be caused from the threading processes.
   - The code in some areas could be improved and cleaned up such as:
